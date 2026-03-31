@@ -2,8 +2,28 @@ import 'dart:convert';
 
 import 'package:dartx/dartx.dart';
 import 'package:isar_community/isar.dart';
-
+import 'package:meta/meta.dart';
 import 'package:xxh3/xxh3.dart';
+
+@visibleForTesting
+int generateWebSafeId(int hash) {
+  // JavaScript safe integer range: -(2^53 - 1) to (2^53 - 1)
+  const maxSafeInteger = 9007199254740991;
+
+  // Convert hash to unsigned representation for consistent handling
+  final unsignedHash = hash.toUnsigned(64);
+
+  // Use bit manipulation to reduce range while preserving distribution
+  // Mix high and low bits to maintain entropy
+  final highBits = unsignedHash >> 32;
+  final lowBits = unsignedHash & 0xFFFFFFFF;
+  final mixedHash = highBits ^ lowBits;
+
+  // Ensure result is within safe range and non-zero
+  final safeHash = (mixedHash % (maxSafeInteger - 1)) + 1;
+
+  return safeHash;
+}
 
 class ObjectInfo {
   ObjectInfo({
@@ -26,7 +46,7 @@ class ObjectInfo {
   final List<ObjectIndex> indexes;
   final List<ObjectLink> links;
 
-  int get id => xxh3(utf8.encode(isarName));
+  int get id => generateWebSafeId(xxh3(utf8.encode(isarName)));
 
   bool get isEmbedded => accessor == null;
 
@@ -171,7 +191,7 @@ class ObjectIndex {
   final bool unique;
   final bool replace;
 
-  late final id = xxh3(utf8.encode(name));
+  late final int id = generateWebSafeId(xxh3(utf8.encode(name)));
 }
 
 class ObjectLink {
@@ -200,6 +220,6 @@ class ObjectLink {
     final colId = xxh3(utf8.encode(col), seed: isBacklink ? 1 : 0);
 
     final name = targetLinkIsarName ?? isarName;
-    return xxh3(utf8.encode(name), seed: colId);
+    return generateWebSafeId(xxh3(utf8.encode(name), seed: colId));
   }
 }
